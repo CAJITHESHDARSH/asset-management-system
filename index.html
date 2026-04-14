@@ -124,6 +124,7 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 
 /* ── STATS ── */
 .stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+#panel-view .stats-row{grid-template-columns:repeat(4,1fr)}
 @media(min-width:640px){.stats-row{gap:14px}}
 .stat{background:var(--white);border:1.5px solid var(--s200);border-radius:var(--r12);padding:14px 10px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .stat-lbl{font-size:10px;font-weight:700;color:var(--s400);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
@@ -149,6 +150,40 @@ tbody td{padding:10px 14px;color:var(--s800);vertical-align:middle}
 .mono{font-family:'DM Mono',monospace;font-size:12px;color:var(--s500)}
 .tbl-empty{padding:48px 20px;text-align:center;color:var(--s400);font-size:14px}
 .tbl-loading{padding:40px 20px;text-align:center;color:var(--s400);display:flex;flex-direction:column;align-items:center;gap:12px}
+
+/* ── REGISTER TAB: Freeze panes + totals row ── */
+#dataTbl{overflow:auto;max-height:62vh;border-radius:var(--r12);border:1.5px solid var(--s200)}
+#dataTbl table{border-collapse:separate;border-spacing:0;min-width:max-content;width:100%}
+#dataTbl tbody td{border-bottom:1px solid var(--s100)}
+#dataTbl tbody tr:last-child td{border-bottom:none}
+/* Freeze ENTIRE thead as one block — most reliable cross-browser approach */
+#dataTbl thead{position:sticky;top:0;z-index:10}
+/* Totals row */
+#dataTbl .reg-tot-row th{background:var(--s700);color:#fff;padding:8px 13px;font-size:12px;font-weight:700;white-space:nowrap;text-align:center;border-bottom:2px solid var(--g500)}
+#dataTbl .reg-tot-row th:first-child{text-align:left}
+/* Header row */
+#dataTbl .reg-hdr-row th{background:var(--g800);color:#fff;padding:11px 14px;font-size:11.5px;font-weight:600;letter-spacing:.05em;white-space:nowrap;text-align:left}
+#dataTbl .reg-hdr-row th.num{text-align:center}
+/* Sticky first 3 columns — left only; vertical freeze handled by thead above */
+#dataTbl .rs1{position:sticky;left:0;z-index:3;min-width:44px;width:44px}
+#dataTbl .rs2{position:sticky;left:44px;z-index:3;min-width:176px;width:176px}
+#dataTbl .rs3{position:sticky;left:220px;z-index:3;min-width:90px;width:90px;border-right:2px solid var(--s200)!important}
+/* thead sticky-col cells sit above body sticky-col cells */
+#dataTbl thead .rs1,#dataTbl thead .rs2,#dataTbl thead .rs3{z-index:4}
+/* Body sticky cell backgrounds (opaque to mask scrolled content) */
+#dataTbl tbody td.rs1,#dataTbl tbody td.rs2,#dataTbl tbody td.rs3{background:#fff}
+#dataTbl tbody tr:hover td{background:var(--g50)}
+#dataTbl tbody tr:hover td.rs1,#dataTbl tbody tr:hover td.rs2,#dataTbl tbody tr:hover td.rs3{background:var(--g50)}
+/* Nil column: amber tint in totals + subtle in header */
+#dataTbl .reg-tot-row .rt-nil-col{background:rgba(217,119,6,.35)!important;color:#fff!important}
+#dataTbl .reg-hdr-row .rt-nil-col{background:rgba(255,255,255,.06)!important}
+/* Nil cell in body */
+.rt-nil-cell{color:var(--s300)!important;text-align:center;font-style:italic;font-size:12px}
+
+/* ── OFFLINE BAR ── */
+.offline-bar{display:none;align-items:center;gap:10px;background:#7c2d12;color:#fed7aa;font-size:13px;font-weight:600;padding:8px 18px;position:sticky;top:56px;z-index:199;border-bottom:1px solid #9a3412}
+.offline-bar svg{width:16px;height:16px;stroke:#fed7aa;fill:none;stroke-width:2;flex-shrink:0}
+.q-badge{display:none;align-items:center;gap:5px;background:var(--amber);color:#fff;border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700;flex-shrink:0;cursor:pointer}
 
 /* ── CUSTOM SEARCHABLE DROPDOWN ── */
 .cs-wrap{position:relative;width:100%}
@@ -225,6 +260,7 @@ tbody td{padding:10px 14px;color:var(--s800);vertical-align:middle}
       <span id="liveIndicator" title="Live sync" style="display:none;align-items:center;gap:5px;font-size:11px;font-weight:600;color:rgba(255,255,255,.7);background:rgba(255,255,255,.1);border-radius:20px;padding:2px 9px 2px 6px;flex-shrink:0">
         <span id="liveDot" style="width:7px;height:7px;border-radius:50%;background:#4ade80;display:inline-block;animation:livePulse 1.8s ease-in-out infinite"></span>LIVE
       </span>
+      <span id="qBadge" class="q-badge" title="Entries saved offline — tap to sync now" onclick="oqDrain()">&#8635; <span id="qBadgeCount">0</span> pending</span>
     </div>
     <div style="display:flex;align-items:center;flex-shrink:0">
       <div class="user-chip">
@@ -233,6 +269,12 @@ tbody td{padding:10px 14px;color:var(--s800);vertical-align:middle}
       </div>
       <button class="btn-out" onclick="doLogout()">Sign Out</button>
     </div>
+  </div>
+
+  <div class="offline-bar" id="offlineBar">
+    <svg viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55M5 12.55a10.94 10.94 0 0 1 5.17-2.39M10.71 5.05A16 16 0 0 1 22.56 9M1.42 9a15.91 15.91 0 0 1 4.7-2.88M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/></svg>
+    You're offline — entries are saved on this device and will sync automatically when connected.
+    <span id="offlineQCount" style="background:rgba(255,255,255,.15);border-radius:12px;padding:1px 8px;font-size:11px"></span>
   </div>
 
   <div class="tab-bar">
@@ -319,6 +361,10 @@ tbody td{padding:10px 14px;color:var(--s800);vertical-align:middle}
         <div class="stat"><div class="stat-lbl">Items</div><div class="stat-val" id="si">—</div></div>
         <div class="stat"><div class="stat-lbl">Classes</div><div class="stat-val" id="sc">—</div></div>
         <div class="stat"><div class="stat-lbl">Units</div><div class="stat-val" id="su">—</div></div>
+        <div class="stat" style="border-color:var(--amber-b);background:var(--amber-bg)">
+          <div class="stat-lbl" style="color:var(--amber)">Pending</div>
+          <div class="stat-val" id="sp" style="color:var(--amber)">—</div>
+        </div>
       </div>
       <div class="card">
         <div class="card-title">Asset Register</div>
@@ -327,11 +373,18 @@ tbody td{padding:10px 14px;color:var(--s800);vertical-align:middle}
             <input type="text" id="vs" placeholder="Item name or code…" oninput="renderData()"></div>
           <div class="fg"><label>Class</label>
             <select id="vc" onchange="renderData()"><option value="">All Classes</option></select></div>
+          <div class="fg"><label>Show</label>
+            <select id="vNil" onchange="renderData()">
+              <option value="">All Items</option>
+              <option value="nil">Has Nil / Blank</option>
+              <option value="filled">All Filled</option>
+            </select></div>
           <button class="btn-icon" onclick="loadData()" title="Refresh">&#8635;</button>
         </div>
-        <div class="tbl-wrap" id="dataTbl">
+        <div id="dataTbl">
           <div class="tbl-loading"><span class="spin dk"></span><span>Loading…</span></div>
         </div>
+        <div id="pendingPanel"></div>
       </div>
     </div>
 
@@ -641,6 +694,10 @@ function loginAs(username, role) {
   document.getElementById('uname').textContent = currentUser;
   document.getElementById('uav').textContent   = currentUser.charAt(0).toUpperCase();
   applyRoleRestrictions(currentRole);
+  // Show pending badge + drain any queue left from a previous offline session
+  oqUpdateUI();
+  if (navigator.onLine) oqDrain();
+
   loadLockedClasses(() => {
     loadData();
     loadLog();
@@ -761,6 +818,75 @@ function stopAutoRefresh() {
   if (ind) ind.style.display = 'none';
   syncInFlight = false;
 }
+
+// ══════════════════════════════════════════════════════════
+//  OFFLINE QUEUE  — saves to localStorage, drains on reconnect
+// ══════════════════════════════════════════════════════════
+const OQ_KEY = 'assetMgrOfflineQueue';
+
+function oqGet()       { try { return JSON.parse(localStorage.getItem(OQ_KEY) || '[]'); } catch { return []; } }
+function oqSave(q)     { localStorage.setItem(OQ_KEY, JSON.stringify(q)); }
+
+function oqPush(item) {
+  const q = oqGet();
+  q.push({ ...item, qid: Date.now() + '_' + Math.random().toString(36).slice(2) });
+  oqSave(q);
+  oqUpdateUI();
+}
+
+function oqRemove(qid) {
+  oqSave(oqGet().filter(i => i.qid !== qid));
+  oqUpdateUI();
+}
+
+function oqUpdateUI() {
+  const q   = oqGet();
+  const n   = q.length;
+  const badge = document.getElementById('qBadge');
+  const count = document.getElementById('qBadgeCount');
+  const bar   = document.getElementById('offlineBar');
+  const oqc   = document.getElementById('offlineQCount');
+  if (badge) { badge.style.display = n > 0 ? 'inline-flex' : 'none'; }
+  if (count) count.textContent = n;
+  if (oqc)   oqc.textContent   = n > 0 ? n + ' item' + (n > 1 ? 's' : '') + ' queued' : '';
+  if (bar && !navigator.onLine) bar.style.display = 'flex';
+}
+
+async function oqDrain() {
+  if (!navigator.onLine) return;
+  const q = oqGet();
+  if (!q.length) return;
+  let synced = 0;
+  for (const item of [...q]) {
+    try {
+      await new Promise((resolve, reject) => call(item.fn, item.args, resolve, reject));
+      oqRemove(item.qid);
+      synced++;
+    } catch(e) {
+      break; // network still unstable — try again next time
+    }
+  }
+  if (synced > 0) {
+    silentLoadData();
+    silentLoadLog();
+  }
+}
+
+window.addEventListener('online', () => {
+  const bar = document.getElementById('offlineBar');
+  if (bar) bar.style.display = 'none';
+  setLiveDot(true);
+  startAutoRefresh();
+  oqDrain();
+});
+
+window.addEventListener('offline', () => {
+  const bar = document.getElementById('offlineBar');
+  if (bar) bar.style.display = 'flex';
+  setLiveDot(false);
+  stopAutoRefresh();
+  oqUpdateUI();
+});
 
 function pollTimestamp() {
   if (syncInFlight) return; // skip if previous poll still running
@@ -909,9 +1035,13 @@ function loadData() {
 function updateStats() {
   let u=0;
   sheetData.rows.forEach(r => r.classCounts.forEach(v=>{ const n=parseFloat(v); if(!isNaN(n)) u+=n; }));
+  const pending = sheetData.classHeaders.filter((_,ci) =>
+    sheetData.rows.every(r => { const n=parseFloat(r.classCounts[ci]); return isNaN(n)||n===0; })
+  ).length;
   document.getElementById('si').textContent = sheetData.rows.length;
   document.getElementById('sc').textContent = sheetData.classHeaders.length;
   document.getElementById('su').textContent = u;
+  document.getElementById('sp').textContent = pending;
 }
 
 function populateDDs() {
@@ -932,38 +1062,136 @@ function populateDDs() {
 }
 
 function renderData() {
-  const srch = document.getElementById('vs').value.toLowerCase();
-  const fcls = document.getElementById('vc').value;
+  const srch  = document.getElementById('vs').value.toLowerCase();
+  const fcls  = document.getElementById('vc').value;
+  const vNil  = (document.getElementById('vNil') || {}).value || '';
   const { classHeaders, rows } = sheetData;
+  const pendingDiv = document.getElementById('pendingPanel');
 
+  if (!classHeaders || !rows) return;
+
+  // Visible columns
   const colIdx = fcls
-    ? classHeaders.map((h,i)=>h===fcls?i:-1).filter(i=>i>=0)
-    : classHeaders.map((_,i)=>i);
+    ? classHeaders.map((h,i) => h===fcls ? i : -1).filter(i => i>=0)
+    : classHeaders.map((_,i) => i);
 
-  const filtered = rows.filter(r =>
+  // Search filter
+  let filtered = rows.filter(r =>
     !srch || r.itemName.toLowerCase().includes(srch) || r.assetCode.toLowerCase().includes(srch));
 
-  if (!filtered.length) {
-    document.getElementById('dataTbl').innerHTML='<div class="tbl-empty">No records found.</div>'; return;
+  // Nil / Filled filter
+  if (vNil === 'nil') {
+    filtered = filtered.filter(r => colIdx.some(ci => {
+      const n = parseFloat(r.classCounts[ci]); return isNaN(n) || n === 0;
+    }));
+  } else if (vNil === 'filled') {
+    filtered = filtered.filter(r => colIdx.every(ci => {
+      const n = parseFloat(r.classCounts[ci]); return !isNaN(n) && n > 0;
+    }));
   }
 
-  const visH = colIdx.map(i=>classHeaders[i]);
-  let html = '<table><thead><tr><th style="min-width:36px">#</th><th style="min-width:160px">Item Name</th><th style="min-width:80px">Code</th>';
-  visH.forEach(h=>{ html+=`<th class="num" style="min-width:80px">${h}</th>`; });
-  html += '</tr></thead><tbody>';
+  if (!filtered.length) {
+    document.getElementById('dataTbl').innerHTML = '<div class="tbl-empty">No records found.</div>';
+    if (pendingDiv) pendingDiv.innerHTML = '';
+    return;
+  }
 
-  filtered.forEach((r,ri)=>{
-    html += `<tr><td class="mono">${r.slNo||ri+1}</td><td style="font-weight:600">${r.itemName}</td><td class="mono">${r.assetCode}</td>`;
-    colIdx.forEach(ci=>{
-      const v=r.classCounts[ci], n=parseFloat(v);
-      html += (!isNaN(n)&&n>0)
+  const visH = colIdx.map(i => classHeaders[i]);
+
+  // Column totals (over visible + filtered rows)
+  const colTotals = colIdx.map(ci =>
+    filtered.reduce((s, r) => s + (parseFloat(r.classCounts[ci]) || 0), 0)
+  );
+  const grandTotal = colTotals.reduce((a,b) => a+b, 0);
+
+  // Build table
+  let html = `<table>
+    <thead>
+      <tr class="reg-tot-row">
+        <th class="rs1">Grand Total</th>
+        <th class="rs2" style="text-align:right;padding-right:16px">${grandTotal > 0 ? grandTotal : '—'}</th>
+        <th class="rs3"></th>
+        ${colTotals.map((t,j) =>
+          `<th class="num${t===0?' rt-nil-col':''}">${t > 0 ? t : 'Nil'}</th>`
+        ).join('')}
+      </tr>
+      <tr class="reg-hdr-row">
+        <th class="rs1">#</th>
+        <th class="rs2">Item Name</th>
+        <th class="rs3">Code</th>
+        ${visH.map((h,j) =>
+          `<th class="num${colTotals[j]===0?' rt-nil-col':''}">${h}</th>`
+        ).join('')}
+      </tr>
+    </thead>
+    <tbody>`;
+
+  filtered.forEach((r, ri) => {
+    html += `<tr>
+      <td class="mono rs1">${r.slNo || ri+1}</td>
+      <td class="rs2" style="font-weight:600">${r.itemName}</td>
+      <td class="mono rs3">${r.assetCode}</td>`;
+    colIdx.forEach((ci, j) => {
+      const n = parseFloat(r.classCounts[ci]);
+      html += (!isNaN(n) && n > 0)
         ? `<td style="text-align:center"><span class="qb">${n}</span></td>`
-        : `<td class="dash">—</td>`;
+        : `<td class="rt-nil-cell">Nil</td>`;
     });
     html += '</tr>';
   });
+
   html += '</tbody></table>';
   document.getElementById('dataTbl').innerHTML = html;
+
+  // Pending classes = those with 0 total across ALL rows (not just filtered)
+  const allColTotals = colIdx.map(ci =>
+    rows.reduce((s, r) => s + (parseFloat(r.classCounts[ci]) || 0), 0)
+  );
+  const pendingClasses = colIdx
+    .filter((_, j) => allColTotals[j] === 0)
+    .map(ci => classHeaders[ci]);
+
+  if (pendingDiv) {
+    if (pendingClasses.length) {
+      const rows10 = pendingClasses.reduce((acc, c, i) => {
+        const row = Math.floor(i / 6);
+        if (!acc[row]) acc[row] = [];
+        acc[row].push(c);
+        return acc;
+      }, []);
+      pendingDiv.innerHTML = `
+        <div style="margin-top:16px;border:1.5px solid var(--amber-b);border-radius:var(--r12);overflow:hidden">
+          <button onclick="this.parentElement.querySelector('.pc-body').style.display=this.parentElement.querySelector('.pc-body').style.display==='none'?'block':'none';this.querySelector('.pc-chevron').style.transform=this.parentElement.querySelector('.pc-body').style.display==='none'?'rotate(0deg)':'rotate(180deg)'"
+            style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:var(--amber-bg);border:none;cursor:pointer;font-family:inherit">
+            <span style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px">&#9888;</span>
+              <span style="font-size:12px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.07em">Pending Classes — No entries recorded yet</span>
+              <span style="background:var(--amber);color:#fff;border-radius:20px;padding:1px 9px;font-size:11px;font-weight:700">${pendingClasses.length}</span>
+            </span>
+            <span class="pc-chevron" style="color:var(--amber);font-size:12px;transition:transform .2s;transform:rotate(0deg)">&#9660;</span>
+          </button>
+          <div class="pc-body" style="display:none;background:var(--amber-bg);border-top:1px solid var(--amber-b);max-height:320px;overflow-y:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead><tr>
+                <th style="padding:7px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;border-bottom:1.5px solid var(--amber-b);background:var(--amber-bg);white-space:nowrap;width:48px">#</th>
+                <th style="padding:7px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;border-bottom:1.5px solid var(--amber-b);background:var(--amber-bg)">Class Name</th>
+              </tr></thead>
+              <tbody>
+                ${pendingClasses.map((c, i) => `
+                  <tr>
+                    <td style="padding:7px 14px;color:var(--s400);font-family:'DM Mono',monospace;font-size:12px;border-bottom:1px solid var(--amber-b);white-space:nowrap">${i + 1}</td>
+                    <td style="padding:7px 14px;color:var(--amber);font-weight:600;border-bottom:1px solid var(--amber-b)">${c}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    } else {
+      pendingDiv.innerHTML = colIdx.length > 0
+        ? `<div style="margin-top:12px;padding:10px 14px;background:var(--g50);border:1.5px solid var(--g100);border-radius:var(--r8);font-size:13px;color:var(--g700);font-weight:600">&#10003; All visible classes have entries recorded</div>`
+        : '';
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1294,17 +1522,27 @@ function submitEntry() {
   updateClassRef();
   updateStats();
   clearForm();
+
+  const _entryArgs = [{ username: currentUser, itemName, assetCode, className, qty }];
+
+  // 5. If offline — queue immediately, skip GAS call
+  if (!navigator.onLine) {
+    oqPush({ fn: 'submitEntry', args: _entryArgs, label: `${qty > 0 ? '+' : ''}${qty} ${itemName} → ${className}` });
+    showMsg('sm', '📶 Offline — saved locally, will sync when connected.', 'info');
+    setTimeout(() => clearMsg('sm'), 3500);
+    return;
+  }
+
   showMsg('sm', '⏳ Saving…', 'info');
 
-  // 5. Save to GAS in background
-  call('submitEntry',
-    [{ username: currentUser, itemName, assetCode, className, qty }],
+  // 6. Online — save to GAS in background
+  call('submitEntry', _entryArgs,
     res => {
       if (res && res.success) {
         showMsg('sm', '✓ Saved', 'ok');
         setTimeout(() => clearMsg('sm'), 2000);
       } else {
-        // Rollback
+        // Server rejected — rollback
         if (row && ci >= 0 && rollbackCounts) row.classCounts[ci] = rollbackCounts[ci];
         logData.shift();
         updateClassRef(); updateStats();
@@ -1312,11 +1550,18 @@ function submitEntry() {
       }
     },
     err => {
-      // Rollback
-      if (row && ci >= 0 && rollbackCounts) row.classCounts[ci] = rollbackCounts[ci];
-      logData.shift();
-      updateClassRef(); updateStats();
-      showMsg('sm', 'Error: ' + err, 'err');
+      if (!navigator.onLine) {
+        // Network dropped mid-request — keep optimistic state, queue it
+        oqPush({ fn: 'submitEntry', args: _entryArgs, label: `${qty > 0 ? '+' : ''}${qty} ${itemName} → ${className}` });
+        showMsg('sm', '📶 Went offline — saved locally, will sync when connected.', 'info');
+        setTimeout(() => clearMsg('sm'), 3500);
+      } else {
+        // Actual error — rollback
+        if (row && ci >= 0 && rollbackCounts) row.classCounts[ci] = rollbackCounts[ci];
+        logData.shift();
+        updateClassRef(); updateStats();
+        showMsg('sm', 'Error: ' + err, 'err');
+      }
     }
   );
 }
@@ -1988,20 +2233,37 @@ function stSubmitCancel() {
   stCancelItems = [];
   document.getElementById('stBcCheckWrap').style.display = 'none';
   document.getElementById('stBcCheckList').innerHTML = '';
+  const _cancelArgs = [slNos];
+
+  // If offline — queue immediately
+  if (!navigator.onLine) {
+    oqPush({ fn: 'cancelBarCodes', args: _cancelArgs, label: `Cancel ${slNos.length} sticker(s)` });
+    showMsg('stCancelMsg', '📶 Offline — saved locally, will sync when connected.', 'info');
+    setTimeout(() => clearMsg('stCancelMsg'), 3500);
+    return;
+  }
+
   showMsg('stCancelMsg', `⏳ Saving ${slNos.length} cancellation(s)…`, 'info');
 
-  // 4. Save to GAS in background
-  call('cancelBarCodes', [slNos], res => {
+  // Online — save to GAS in background
+  call('cancelBarCodes', _cancelArgs, res => {
     showMsg('stCancelMsg', `✅ ${slNos.length} sticker(s) marked as Cancelled.`, 'ok');
     setTimeout(() => clearMsg('stCancelMsg'), 2500);
     call('getBarCodeTabData', [], r2 => { barCodeTabData = Array.isArray(r2) ? r2 : []; }, () => {});
   }, err => {
-    // Rollback
-    stickeringData = rollbackStickering;
-    barCodeTabData = rollbackBcData;
-    stickeringRender();
-    stickeringUpdateStats();
-    showMsg('stCancelMsg', 'Error — rolled back: ' + err, 'err');
+    if (!navigator.onLine) {
+      // Network dropped mid-request — keep optimistic state, queue it
+      oqPush({ fn: 'cancelBarCodes', args: _cancelArgs, label: `Cancel ${slNos.length} sticker(s)` });
+      showMsg('stCancelMsg', '📶 Went offline — saved locally, will sync when connected.', 'info');
+      setTimeout(() => clearMsg('stCancelMsg'), 3500);
+    } else {
+      // Actual error — rollback
+      stickeringData = rollbackStickering;
+      barCodeTabData = rollbackBcData;
+      stickeringRender();
+      stickeringUpdateStats();
+      showMsg('stCancelMsg', 'Error — rolled back: ' + err, 'err');
+    }
   });
 }
 
@@ -2179,12 +2441,22 @@ function stickeringAddNew() {
   stickeringRender();
   stickeringUpdateStats();
   stickeringClearAdd();
+
+  const _addArgs = [{ barCode: code, itemName: item, className: cls }];
+
+  // If offline — queue immediately, keep optimistic row
+  if (!navigator.onLine) {
+    oqPush({ fn: 'addStickeringRow', args: _addArgs, label: `Add sticker ${code}` });
+    showMsg('stAddMsg', '📶 Offline — saved locally, will sync when connected.', 'info');
+    setTimeout(() => clearMsg('stAddMsg'), 3500);
+    return;
+  }
+
   showMsg('stAddMsg', `⏳ Saving "${code}"…`, 'info');
 
-  // 3. Save to GAS in background
-  call('addStickeringRow', [{ barCode: code, itemName: item, className: cls }], res => {
+  // 3. Online — save to GAS in background
+  call('addStickeringRow', _addArgs, res => {
     if (res && res.duplicate) {
-      // Already exists in sheet — our local add is fine, just inform
       showMsg('stAddMsg', `✅ "${code}" recorded (already in sheet).`, 'ok');
     } else {
       showMsg('stAddMsg', `✅ "${code}" added successfully.`, 'ok');
@@ -2192,12 +2464,19 @@ function stickeringAddNew() {
     setTimeout(() => clearMsg('stAddMsg'), 2500);
     call('getBarCodeTabData', [], r2 => { barCodeTabData = Array.isArray(r2) ? r2 : []; }, () => {});
   }, err => {
-    // Rollback — remove the optimistically added row
-    const idx = stickeringData.indexOf(newRow);
-    if (idx > -1) stickeringData.splice(idx, 1);
-    stickeringRender();
-    stickeringUpdateStats();
-    showMsg('stAddMsg', 'Error — rolled back: ' + err, 'err');
+    if (!navigator.onLine) {
+      // Network dropped mid-request — keep optimistic row, queue it
+      oqPush({ fn: 'addStickeringRow', args: _addArgs, label: `Add sticker ${code}` });
+      showMsg('stAddMsg', '📶 Went offline — saved locally, will sync when connected.', 'info');
+      setTimeout(() => clearMsg('stAddMsg'), 3500);
+    } else {
+      // Actual error — rollback
+      const idx = stickeringData.indexOf(newRow);
+      if (idx > -1) stickeringData.splice(idx, 1);
+      stickeringRender();
+      stickeringUpdateStats();
+      showMsg('stAddMsg', 'Error — rolled back: ' + err, 'err');
+    }
   });
 }
 
