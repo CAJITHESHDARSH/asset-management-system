@@ -124,7 +124,8 @@ select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/
 
 /* ── STATS ── */
 .stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
-#panel-view .stats-row{grid-template-columns:repeat(4,1fr)}
+#panel-view .stats-row{grid-template-columns:repeat(3,1fr)}
+@media(min-width:640px){#panel-view .stats-row{grid-template-columns:repeat(6,1fr)}}
 @media(min-width:640px){.stats-row{gap:14px}}
 .stat{background:var(--white);border:1.5px solid var(--s200);border-radius:var(--r12);padding:14px 10px;text-align:center;box-shadow:0 1px 3px rgba(0,0,0,.06)}
 .stat-lbl{font-size:10px;font-weight:700;color:var(--s400);text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px}
@@ -310,8 +311,11 @@ tbody td{padding:10px 14px;color:var(--s800);vertical-align:middle}
           </div>
           <button class="btn btn-warn" id="lockClassBtn" onclick="doLockClass()" title="Lock class so it cannot be changed accidentally">&#128274; Submit Class</button>
           <button class="btn btn-danger" id="unlockClassBtn" onclick="doUnlockClass()" style="display:none" title="Unlock class (Kush / Darsh only)">&#128275; Unlock Class</button>
+          <button class="btn btn-warn" id="eStickerLockBtn" onclick="doLockStickerFromEntry()" style="display:none" title="Submit stickering for this class — only Admin can undo">&#128274; Submit Sticker</button>
+          <button class="btn btn-danger" id="eStickerUnlockBtn" onclick="doUnlockStickerFromEntry()" style="display:none" title="Unlock stickering (Admin only)">&#128275; Unlock Sticker</button>
         </div>
-        <div id="lockInfo" style="font-size:12px;color:var(--amber);font-weight:600;margin-bottom:10px;margin-top:-6px;min-height:16px"></div>
+        <div id="lockInfo" style="font-size:12px;color:var(--amber);font-weight:600;margin-bottom:4px;margin-top:-6px;min-height:16px"></div>
+        <div id="eStickerLockInfo" style="font-size:12px;color:var(--g600);font-weight:600;margin-bottom:10px;min-height:16px"></div>
 
         <!-- 2. ITEM NAME (searchable) + Code + Qty -->
         <div class="entry-grid">
@@ -362,8 +366,16 @@ tbody td{padding:10px 14px;color:var(--s800);vertical-align:middle}
         <div class="stat"><div class="stat-lbl">Classes</div><div class="stat-val" id="sc">—</div></div>
         <div class="stat"><div class="stat-lbl">Units</div><div class="stat-val" id="su">—</div></div>
         <div class="stat" style="border-color:var(--amber-b);background:var(--amber-bg)">
-          <div class="stat-lbl" style="color:var(--amber)">Pending</div>
+          <div class="stat-lbl" style="color:var(--amber)">No Entries</div>
           <div class="stat-val" id="sp" style="color:var(--amber)">—</div>
+        </div>
+        <div class="stat" style="border-color:var(--amber-b);background:var(--amber-bg)">
+          <div class="stat-lbl" style="color:var(--amber)">Submit Pending</div>
+          <div class="stat-val" id="sps" style="color:var(--amber)">—</div>
+        </div>
+        <div class="stat" style="border-color:var(--red-b);background:var(--red-bg)">
+          <div class="stat-lbl" style="color:var(--red)">Sticker Pending</div>
+          <div class="stat-val" id="spst" style="color:var(--red)">—</div>
         </div>
       </div>
       <div class="card">
@@ -385,6 +397,8 @@ tbody td{padding:10px 14px;color:var(--s800);vertical-align:middle}
           <div class="tbl-loading"><span class="spin dk"></span><span>Loading…</span></div>
         </div>
         <div id="pendingPanel"></div>
+        <div id="pendingSubmitPanel"></div>
+        <div id="pendingStickerPanel"></div>
       </div>
     </div>
 
@@ -422,6 +436,7 @@ tbody td{padding:10px 14px;color:var(--s800);vertical-align:middle}
           </div>
           <button class="btn btn-p" onclick="generateBarcodes()" id="bcGenBtn">🏷️ Generate Labels</button>
           <button class="btn btn-s" id="bcWordBtn" onclick="downloadWordDoc()" style="display:none">📄 Download Word (.docx)</button>
+          <button class="btn btn-s" id="bcWordByUserBtn" onclick="downloadWordDocByUser()" style="display:none" title="One page per user — classes flow together, no wasted sticker space">👤 Download Word (By User)</button>
         </div>
 
         <div id="bcMsg" class="msg"></div>
@@ -488,11 +503,19 @@ tbody td{padding:10px 14px;color:var(--s800);vertical-align:middle}
       <!-- ADD NEW CODE -->
       <div class="card">
         <div class="card-title">➕ Add New Sticker Code</div>
-        <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr">
+
+        <!-- Class row with sticker lock (mirrors Add Entry tab pattern) -->
+        <div class="class-row">
           <div class="fg">
             <label>Class Name</label>
             <select id="stNewClass" onchange="stNewClassChange()"><option value="">— Select Class —</option></select>
           </div>
+          <button class="btn btn-warn" id="stStickerLockBtn" onclick="doLockStickerClass()" style="display:none" title="Submit stickering — only Admin can undo">&#128274; Submit Sticker</button>
+          <button class="btn btn-danger" id="stStickerUnlockBtn" onclick="doUnlockStickerClass()" style="display:none" title="Unlock stickering (Admin only)">&#128275; Unlock Sticker</button>
+        </div>
+        <div id="stStickerLockInfo" style="font-size:12px;color:var(--amber);font-weight:600;margin-bottom:10px;margin-top:-6px;min-height:16px"></div>
+
+        <div class="form-grid" style="grid-template-columns:1fr 1fr">
           <div class="fg">
             <label>Item Name</label>
             <div class="cs-wrap" id="stItemSelectWrap">
@@ -599,6 +622,12 @@ function call(fn, args, onSuccess, onError) {
     } else if (fn === 'unlockClass') {
       const { className } = args[0];
       p = fetchGet({ action: 'unlockClass', className });
+    } else if (fn === 'lockStickerClass') {
+      const { className, lockedBy, timestamp } = args[0];
+      p = fetchGet({ action: 'lockStickerClass', className, lockedBy, timestamp });
+    } else if (fn === 'unlockStickerClass') {
+      const { className } = args[0];
+      p = fetchGet({ action: 'unlockStickerClass', className });
     } else if (fn === 'saveBarcodes') {
       p = fetchPost({ action: 'saveBarcodes' }, args[0]);
     } else if (fn === 'getStickeringData') {
@@ -647,8 +676,9 @@ let currentRole = ''; // Admin | Editor | Demo
 let sheetData   = { classHeaders: [], rows: [] };
 let logData     = [];
 let itemMap     = {}; // itemName → assetCode
-let lockedClasses    = new Map(); // className → { lockedBy, timestamp }
-let classAssignments = new Map(); // className → assignedUser
+let lockedClasses        = new Map(); // className → { lockedBy, timestamp }
+let stickerLockedClasses = new Map(); // className → { lockedBy, timestamp }  (column F)
+let classAssignments     = new Map(); // className → assignedUser
 
 // ══════════════════════════════════════════════════════════
 //  UTILS
@@ -710,12 +740,14 @@ function loginAs(username, role) {
 function loadLockedClasses(callback) {
   call('getLockedClasses', [],
     res => {
-      lockedClasses    = new Map();
-      classAssignments = new Map();
+      lockedClasses        = new Map();
+      classAssignments     = new Map();
+      stickerLockedClasses = new Map();
       (Array.isArray(res) ? res : []).forEach(r => {
         if (!r.className) return;
-        if (r.assignedTo) classAssignments.set(r.className, r.assignedTo);
-        if (r.locked)     lockedClasses.set(r.className, { lockedBy: r.lockedBy || '', timestamp: r.timestamp || '' });
+        if (r.assignedTo)    classAssignments.set(r.className, r.assignedTo);
+        if (r.locked)        lockedClasses.set(r.className, { lockedBy: r.lockedBy || '', timestamp: r.timestamp || '' });
+        if (r.stickerLocked) stickerLockedClasses.set(r.className, { lockedBy: r.stickerLockedBy || '', timestamp: r.stickerTimestamp || '' });
       });
       if (callback) callback();
     },
@@ -734,6 +766,7 @@ function doLogout() {
   currentUser  = '';
   currentRole  = '';
   lockedClasses.clear();
+  stickerLockedClasses.clear();
   classAssignments.clear();
   document.getElementById('lu').value = '';
   document.getElementById('lp').value = '';
@@ -754,7 +787,8 @@ function applyRoleRestrictions(role) {
 
   // Demo: disable all write actions
   const writeEls = [
-    'submitBtn', 'lockClassBtn', 'unlockClassBtn', 'bcGenBtn', 'bcWordBtn'
+    'submitBtn', 'lockClassBtn', 'unlockClassBtn', 'bcGenBtn', 'bcWordBtn', 'bcWordByUserBtn',
+    'stStickerLockBtn', 'stStickerUnlockBtn', 'eStickerLockBtn', 'eStickerUnlockBtn'
   ];
   writeEls.forEach(id => {
     const el = document.getElementById(id);
@@ -949,18 +983,27 @@ function silentLoadData() {
 function silentLoadLocks() {
   call('getLockedClasses', [],
     res => {
-      const incomingLocks  = new Map();
-      const incomingAssign = new Map();
+      const incomingLocks        = new Map();
+      const incomingAssign       = new Map();
+      const incomingStickerLocks = new Map();
       (Array.isArray(res) ? res : []).forEach(r => {
         if (!r.className) return;
-        if (r.assignedTo) incomingAssign.set(r.className, r.assignedTo);
-        if (r.locked)     incomingLocks.set(r.className, { lockedBy: r.lockedBy || '', timestamp: r.timestamp || '' });
+        if (r.assignedTo)    incomingAssign.set(r.className, r.assignedTo);
+        if (r.locked)        incomingLocks.set(r.className, { lockedBy: r.lockedBy || '', timestamp: r.timestamp || '' });
+        if (r.stickerLocked) incomingStickerLocks.set(r.className, { lockedBy: r.stickerLockedBy || '', timestamp: r.stickerTimestamp || '' });
       });
-      if (JSON.stringify([...incomingLocks])  === JSON.stringify([...lockedClasses]) &&
-          JSON.stringify([...incomingAssign]) === JSON.stringify([...classAssignments])) return;
-      lockedClasses    = incomingLocks;
-      classAssignments = incomingAssign;
+      if (JSON.stringify([...incomingLocks])        === JSON.stringify([...lockedClasses]) &&
+          JSON.stringify([...incomingAssign])        === JSON.stringify([...classAssignments]) &&
+          JSON.stringify([...incomingStickerLocks])  === JSON.stringify([...stickerLockedClasses])) return;
+      lockedClasses        = incomingLocks;
+      classAssignments     = incomingAssign;
+      stickerLockedClasses = incomingStickerLocks;
       applyClassLockState();
+      // Refresh sticker lock UI on both tabs
+      const eClass = document.getElementById('eClass') ? document.getElementById('eClass').value : '';
+      if (eClass) updateStickerLockUIEntry(eClass);
+      const stCls = document.getElementById('stNewClass') ? document.getElementById('stNewClass').value : '';
+      if (stCls) applyStickerLockState();
     },
     () => {}
   );
@@ -993,10 +1036,10 @@ function switchTab(name) {
     document.getElementById('panel-'+t).classList.toggle('active', t===name);
     document.getElementById('tab-'+t).classList.toggle('active', t===name);
   });
-  if (name==='add') {
+  if (name==='add' || name==='stickering') {
     silentLoadLocks();
     // If sheet data hasn't loaded yet, trigger it now so dropdowns populate
-    if (!sheetData.classHeaders || !sheetData.classHeaders.length) loadData();
+    if (name==='add' && (!sheetData.classHeaders || !sheetData.classHeaders.length)) loadData();
   }
   if (name==='view')       loadData();
   if (name==='log')        loadLog();
@@ -1035,13 +1078,17 @@ function loadData() {
 function updateStats() {
   let u=0;
   sheetData.rows.forEach(r => r.classCounts.forEach(v=>{ const n=parseFloat(v); if(!isNaN(n)) u+=n; }));
-  const pending = sheetData.classHeaders.filter((_,ci) =>
+  const pending        = sheetData.classHeaders.filter((_,ci) =>
     sheetData.rows.every(r => { const n=parseFloat(r.classCounts[ci]); return isNaN(n)||n===0; })
   ).length;
-  document.getElementById('si').textContent = sheetData.rows.length;
-  document.getElementById('sc').textContent = sheetData.classHeaders.length;
-  document.getElementById('su').textContent = u;
-  document.getElementById('sp').textContent = pending;
+  const pendingSubmit  = sheetData.classHeaders.filter(c => !lockedClasses.has(c)).length;
+  const pendingSticker = sheetData.classHeaders.filter(c => !stickerLockedClasses.has(c)).length;
+  document.getElementById('si').textContent   = sheetData.rows.length;
+  document.getElementById('sc').textContent   = sheetData.classHeaders.length;
+  document.getElementById('su').textContent   = u;
+  document.getElementById('sp').textContent   = pending;
+  document.getElementById('sps').textContent  = pendingSubmit;
+  document.getElementById('spst').textContent = pendingSticker;
 }
 
 function populateDDs() {
@@ -1192,6 +1239,84 @@ function renderData() {
         : '';
     }
   }
+
+  // ── Pending Submit panel (classes not yet locked in col C) ──
+  const submitDiv = document.getElementById('pendingSubmitPanel');
+  if (submitDiv) {
+    const pendingSubmitClasses = sheetData.classHeaders.filter(c => !lockedClasses.has(c));
+    if (pendingSubmitClasses.length) {
+      submitDiv.innerHTML = `
+        <div style="margin-top:12px;border:1.5px solid var(--amber-b);border-radius:var(--r12);overflow:hidden">
+          <button onclick="this.parentElement.querySelector('.ps-body').style.display=this.parentElement.querySelector('.ps-body').style.display==='none'?'block':'none';this.querySelector('.ps-chevron').style.transform=this.parentElement.querySelector('.ps-body').style.display==='none'?'rotate(0deg)':'rotate(180deg)'"
+            style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:var(--amber-bg);border:none;cursor:pointer;font-family:inherit">
+            <span style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px">&#128274;</span>
+              <span style="font-size:12px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.07em">Submit Pending — Entry not yet submitted</span>
+              <span style="background:var(--amber);color:#fff;border-radius:20px;padding:1px 9px;font-size:11px;font-weight:700">${pendingSubmitClasses.length}</span>
+            </span>
+            <span class="ps-chevron" style="color:var(--amber);font-size:12px;transition:transform .2s;transform:rotate(0deg)">&#9660;</span>
+          </button>
+          <div class="ps-body" style="display:none;background:var(--amber-bg);border-top:1px solid var(--amber-b);max-height:320px;overflow-y:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead><tr>
+                <th style="padding:7px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;border-bottom:1.5px solid var(--amber-b);background:var(--amber-bg);white-space:nowrap;width:48px">#</th>
+                <th style="padding:7px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;border-bottom:1.5px solid var(--amber-b);background:var(--amber-bg)">Class Name</th>
+                <th style="padding:7px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:.06em;border-bottom:1.5px solid var(--amber-b);background:var(--amber-bg)">Assigned To</th>
+              </tr></thead>
+              <tbody>
+                ${pendingSubmitClasses.map((c, i) => `
+                  <tr>
+                    <td style="padding:7px 14px;color:var(--s400);font-family:'DM Mono',monospace;font-size:12px;border-bottom:1px solid var(--amber-b);white-space:nowrap">${i + 1}</td>
+                    <td style="padding:7px 14px;color:var(--amber);font-weight:600;border-bottom:1px solid var(--amber-b)">${c}</td>
+                    <td style="padding:7px 14px;color:var(--s600);border-bottom:1px solid var(--amber-b)">${classAssignments.get(c) || '—'}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    } else {
+      submitDiv.innerHTML = `<div style="margin-top:12px;padding:10px 14px;background:var(--g50);border:1.5px solid var(--g100);border-radius:var(--r8);font-size:13px;color:var(--g700);font-weight:600">&#10003; All classes have been submitted</div>`;
+    }
+  }
+
+  // ── Pending Sticker panel (classes not yet sticker-submitted in col F) ──
+  const stickerDiv = document.getElementById('pendingStickerPanel');
+  if (stickerDiv) {
+    const pendingStickerClasses = sheetData.classHeaders.filter(c => !stickerLockedClasses.has(c));
+    if (pendingStickerClasses.length) {
+      stickerDiv.innerHTML = `
+        <div style="margin-top:12px;border:1.5px solid var(--red-b);border-radius:var(--r12);overflow:hidden">
+          <button onclick="this.parentElement.querySelector('.pst-body').style.display=this.parentElement.querySelector('.pst-body').style.display==='none'?'block':'none';this.querySelector('.pst-chevron').style.transform=this.parentElement.querySelector('.pst-body').style.display==='none'?'rotate(0deg)':'rotate(180deg)'"
+            style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:11px 16px;background:var(--red-bg);border:none;cursor:pointer;font-family:inherit">
+            <span style="display:flex;align-items:center;gap:8px">
+              <span style="font-size:13px">&#128204;</span>
+              <span style="font-size:12px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.07em">Sticker Pending — Stickering not yet submitted</span>
+              <span style="background:var(--red);color:#fff;border-radius:20px;padding:1px 9px;font-size:11px;font-weight:700">${pendingStickerClasses.length}</span>
+            </span>
+            <span class="pst-chevron" style="color:var(--red);font-size:12px;transition:transform .2s;transform:rotate(0deg)">&#9660;</span>
+          </button>
+          <div class="pst-body" style="display:none;background:var(--red-bg);border-top:1px solid var(--red-b);max-height:320px;overflow-y:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:13px">
+              <thead><tr>
+                <th style="padding:7px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.06em;border-bottom:1.5px solid var(--red-b);background:var(--red-bg);white-space:nowrap;width:48px">#</th>
+                <th style="padding:7px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.06em;border-bottom:1.5px solid var(--red-b);background:var(--red-bg)">Class Name</th>
+                <th style="padding:7px 14px;text-align:left;font-size:11px;font-weight:700;color:var(--red);text-transform:uppercase;letter-spacing:.06em;border-bottom:1.5px solid var(--red-b);background:var(--red-bg)">Assigned To</th>
+              </tr></thead>
+              <tbody>
+                ${pendingStickerClasses.map((c, i) => `
+                  <tr>
+                    <td style="padding:7px 14px;color:var(--s400);font-family:'DM Mono',monospace;font-size:12px;border-bottom:1px solid var(--red-b);white-space:nowrap">${i + 1}</td>
+                    <td style="padding:7px 14px;color:var(--red);font-weight:600;border-bottom:1px solid var(--red-b)">${c}</td>
+                    <td style="padding:7px 14px;color:var(--s600);border-bottom:1px solid var(--red-b)">${classAssignments.get(c) || '—'}</td>
+                  </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    } else {
+      stickerDiv.innerHTML = `<div style="margin-top:12px;padding:10px 14px;background:var(--g50);border:1.5px solid var(--g100);border-radius:var(--r8);font-size:13px;color:var(--g700);font-weight:600">&#10003; All classes have stickering submitted</div>`;
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1272,6 +1397,7 @@ function applyClassLockState() {
   const isBlocked  = assignedTo && assignedTo !== currentUser && !ADMIN_USERS.includes(currentUser);
 
   updateLockUI(cls);
+  updateStickerLockUIEntry(cls);
   document.getElementById('submitBtn').disabled = locked || isBlocked || currentRole === 'Demo';
 
   if (cls && locked) {
@@ -1295,6 +1421,121 @@ function updateLockUI(cls) {
   const info = locked ? lockedClasses.get(cls) : null;
   const lockInfoEl = document.getElementById('lockInfo');
   if (lockInfoEl) lockInfoEl.textContent = info ? `Locked by ${info.lockedBy} · ${info.timestamp}` : '';
+}
+
+// ── Sticker lock buttons in Add Entry tab ────────────────
+function doLockStickerFromEntry() {
+  const cls = document.getElementById('eClass').value;
+  if (!cls) return;
+  const timestamp = new Date().toLocaleString();
+  setBusy('eStickerLockBtn', true, '&#128274; Submit Sticker');
+  call('lockStickerClass', [{ className: cls, lockedBy: currentUser, timestamp }],
+    () => {
+      stickerLockedClasses.set(cls, { lockedBy: currentUser, timestamp });
+      setBusy('eStickerLockBtn', false, '&#128274; Submit Sticker');
+      updateStickerLockUIEntry(cls);
+      updateStickerLockUI(cls);
+      showMsg('sm', `Stickering for "${cls}" submitted by ${currentUser}. Only Admin can unlock.`, 'info');
+    },
+    err => { setBusy('eStickerLockBtn', false, '&#128274; Submit Sticker'); showMsg('sm', 'Submit failed: ' + err, 'err'); }
+  );
+}
+
+function doUnlockStickerFromEntry() {
+  if (!ADMIN_USERS.includes(currentUser)) {
+    showMsg('sm', 'Only Admin can unlock stickering.', 'err'); return;
+  }
+  const cls = document.getElementById('eClass').value;
+  setBusy('eStickerUnlockBtn', true, '&#128275; Unlock Sticker');
+  call('unlockStickerClass', [{ className: cls }],
+    () => {
+      stickerLockedClasses.delete(cls);
+      setBusy('eStickerUnlockBtn', false, '&#128275; Unlock Sticker');
+      updateStickerLockUIEntry(cls);
+      updateStickerLockUI(cls);
+      clearMsg('sm');
+    },
+    err => { setBusy('eStickerUnlockBtn', false, '&#128275; Unlock Sticker'); showMsg('sm', 'Unlock failed: ' + err, 'err'); }
+  );
+}
+
+function updateStickerLockUIEntry(cls) {
+  const locked  = stickerLockedClasses.has(cls);
+  const isDemo  = currentRole === 'Demo';
+  const isAdmin = ADMIN_USERS.includes(currentUser);
+  const lockBtn   = document.getElementById('eStickerLockBtn');
+  const unlockBtn = document.getElementById('eStickerUnlockBtn');
+  if (lockBtn)   lockBtn.style.display   = (!isDemo && cls && !locked) ? '' : 'none';
+  if (unlockBtn) unlockBtn.style.display = (!isDemo && cls && locked && isAdmin) ? '' : 'none';
+  const info   = locked ? stickerLockedClasses.get(cls) : null;
+  const infoEl = document.getElementById('eStickerLockInfo');
+  if (infoEl) infoEl.textContent = info ? `Stickering submitted by ${info.lockedBy} · ${info.timestamp}` : '';
+}
+
+// ══════════════════════════════════════════════════════════
+//  STICKER LOCK / UNLOCK  (column F of Assign & Lock class)
+// ══════════════════════════════════════════════════════════
+function doLockStickerClass() {
+  const cls = document.getElementById('stNewClass').value;
+  if (!cls) return;
+  const timestamp = new Date().toLocaleString();
+  setBusy('stStickerLockBtn', true, '&#128274; Submit Sticker');
+  call('lockStickerClass', [{ className: cls, lockedBy: currentUser, timestamp }],
+    () => {
+      stickerLockedClasses.set(cls, { lockedBy: currentUser, timestamp });
+      setBusy('stStickerLockBtn', false, '&#128274; Submit Sticker');
+      updateStickerLockUI(cls);
+      document.getElementById('stAddBtn').disabled = true;
+      showMsg('stAddMsg', `Stickering for "${cls}" submitted by ${currentUser}. Only Admin can unlock.`, 'info');
+    },
+    err => { setBusy('stStickerLockBtn', false, '&#128274; Submit Sticker'); showMsg('stAddMsg', 'Submit failed: ' + err, 'err'); }
+  );
+}
+
+function doUnlockStickerClass() {
+  if (!ADMIN_USERS.includes(currentUser)) {
+    showMsg('stAddMsg', 'Only Admin can unlock stickering.', 'err');
+    return;
+  }
+  const cls = document.getElementById('stNewClass').value;
+  setBusy('stStickerUnlockBtn', true, '&#128275; Unlock Sticker');
+  call('unlockStickerClass', [{ className: cls }],
+    () => {
+      stickerLockedClasses.delete(cls);
+      setBusy('stStickerUnlockBtn', false, '&#128275; Unlock Sticker');
+      updateStickerLockUI(cls);
+      document.getElementById('stAddBtn').disabled = false;
+      clearMsg('stAddMsg');
+    },
+    err => { setBusy('stStickerUnlockBtn', false, '&#128275; Unlock Sticker'); showMsg('stAddMsg', 'Unlock failed: ' + err, 'err'); }
+  );
+}
+
+function updateStickerLockUI(cls) {
+  const locked    = stickerLockedClasses.has(cls);
+  const isDemo    = currentRole === 'Demo';
+  const isAdmin   = ADMIN_USERS.includes(currentUser);
+  const lockBtn   = document.getElementById('stStickerLockBtn');
+  const unlockBtn = document.getElementById('stStickerUnlockBtn');
+  if (lockBtn)   lockBtn.style.display   = (!isDemo && cls && !locked) ? '' : 'none';
+  if (unlockBtn) unlockBtn.style.display = (!isDemo && cls && locked && isAdmin) ? '' : 'none';
+  const info = locked ? stickerLockedClasses.get(cls) : null;
+  const infoEl = document.getElementById('stStickerLockInfo');
+  if (infoEl) infoEl.textContent = info ? `Submitted by ${info.lockedBy} · ${info.timestamp}` : '';
+}
+
+function applyStickerLockState() {
+  const cls    = document.getElementById('stNewClass').value;
+  const locked = stickerLockedClasses.has(cls);
+  updateStickerLockUI(cls);
+  const stAddBtn = document.getElementById('stAddBtn');
+  if (stAddBtn) stAddBtn.disabled = locked || currentRole === 'Demo';
+  if (cls && locked) {
+    const info = stickerLockedClasses.get(cls);
+    showMsg('stAddMsg', `Stickering for "${cls}" is submitted by ${info.lockedBy}. Only Admin can unlock.`, 'info');
+  } else {
+    clearMsg('stAddMsg');
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1433,6 +1674,7 @@ function onClassChange() {
   applyClassLockState();
   updateClassRef();
   updatePreview();
+  updateStickerLockUIEntry(document.getElementById('eClass').value);
 }
 
 function onItemSearch() {
@@ -1606,6 +1848,7 @@ function loadExistingBarcodes() {
         '<div class="tbl-empty" style="color:var(--s400);padding:24px 0">No labels generated yet — click "Generate Labels" to create them.</div>';
       document.getElementById('bcSummary').style.display = 'none';
       document.getElementById('bcWordBtn').style.display = 'none';
+      document.getElementById('bcWordByUserBtn').style.display = 'none';
       return;
     }
 
@@ -1623,8 +1866,9 @@ function loadExistingBarcodes() {
     document.getElementById('bcStatCls').textContent   = [...new Set(active.map(b => b.className))].length;
     document.getElementById('bcStatItems').textContent  = [...new Set(active.map(b => b.assetCode))].length;
     document.getElementById('bcStatTotal').textContent  = active.length;
-    document.getElementById('bcSummary').style.display  = '';
-    document.getElementById('bcWordBtn').style.display  = '';
+    document.getElementById('bcSummary').style.display       = '';
+    document.getElementById('bcWordBtn').style.display        = '';
+    document.getElementById('bcWordByUserBtn').style.display  = '';
 
     // Badge: loaded from sheet
     const badge = document.getElementById('bcSourceBadge');
@@ -1679,9 +1923,10 @@ function generateBarcodes() {
 
   if (!bcData.length) {
     showMsg('bcMsg', 'No items with quantities found for the selected class.', 'err');
-    document.getElementById('bcSummary').style.display = 'none';
-    document.getElementById('bcWordBtn').style.display  = 'none';
-    document.getElementById('bcContainer').innerHTML    = '';
+    document.getElementById('bcSummary').style.display      = 'none';
+    document.getElementById('bcWordBtn').style.display       = 'none';
+    document.getElementById('bcWordByUserBtn').style.display = 'none';
+    document.getElementById('bcContainer').innerHTML         = '';
     return;
   }
 
@@ -1689,8 +1934,9 @@ function generateBarcodes() {
   document.getElementById('bcStatCls').textContent   = [...new Set(bcData.map(b => b.className))].length;
   document.getElementById('bcStatItems').textContent  = [...new Set(bcData.map(b => b.assetCode))].length;
   document.getElementById('bcStatTotal').textContent  = bcData.length;
-  document.getElementById('bcSummary').style.display  = '';
-  document.getElementById('bcWordBtn').style.display  = '';
+  document.getElementById('bcSummary').style.display       = '';
+  document.getElementById('bcWordBtn').style.display        = '';
+  document.getElementById('bcWordByUserBtn').style.display  = '';
 
   // Badge: freshly generated
   const badge = document.getElementById('bcSourceBadge');
@@ -1763,6 +2009,91 @@ function renderBarcodeGrid() {
 //    4 cols × 5cm (2835 DXA), row height 2.1cm exact (1191 DXA)
 //    Times New Roman 14pt, centred, no bold, no borders
 // ──────────────────────────────────────────────────────
+// ── Shared Word XML helpers ──────────────────────────────────
+const _docxEsc = s => String(s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;').replace(/'/g,'&apos;');
+
+const _NO_BORDER =
+  '<w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>' +
+  '<w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>' +
+  '<w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>' +
+  '<w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>';
+
+function _xmlCell(code) {
+  return `<w:tc>
+    <w:tcPr>
+      <w:tcW w:w="2835" w:type="dxa"/>
+      <w:tcBorders>${_NO_BORDER}</w:tcBorders>
+      <w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="57" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="57" w:type="dxa"/></w:tcMar>
+      <w:vAlign w:val="center"/>
+    </w:tcPr>
+    <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="0"/></w:pPr>
+      <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>
+        <w:t>${_docxEsc(code)}</w:t></w:r></w:p>
+  </w:tc>`;
+}
+
+function _xmlClassCell(cls) {
+  return `<w:tc>
+    <w:tcPr>
+      <w:tcW w:w="2835" w:type="dxa"/>
+      <w:tcBorders>${_NO_BORDER}</w:tcBorders>
+      <w:tcMar><w:top w:w="0" w:type="dxa"/><w:left w:w="57" w:type="dxa"/><w:bottom w:w="0" w:type="dxa"/><w:right w:w="57" w:type="dxa"/></w:tcMar>
+      <w:vAlign w:val="center"/>
+      <w:shd w:val="clear" w:color="auto" w:fill="D9EAD3"/>
+    </w:tcPr>
+    <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:before="0" w:after="0"/></w:pPr>
+      <w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/><w:b/><w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr>
+        <w:t>${_docxEsc(cls)}</w:t></w:r></w:p>
+  </w:tc>`;
+}
+
+const _SECT_PR =
+  `<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>` +
+  `<w:pgMar w:top="57" w:right="284" w:bottom="0" w:left="284" w:header="720" w:footer="720" w:gutter="0"/></w:sectPr>`;
+
+const _TBL_WRAP = (rows) =>
+  `<w:tbl><w:tblPr><w:tblW w:w="11340" w:type="dxa"/>` +
+  `<w:tblBorders>${_NO_BORDER}<w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/><w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/></w:tblBorders></w:tblPr>` +
+  `<w:tblGrid><w:gridCol w:w="2835"/><w:gridCol w:w="2835"/><w:gridCol w:w="2835"/><w:gridCol w:w="2835"/></w:tblGrid>` +
+  rows + `</w:tbl>`;
+
+function _buildDocxRows(allItems) {
+  let rows = '';
+  const numRows = Math.ceil(allItems.length / 4);
+  for (let r = 0; r < numRows; r++) {
+    rows += `<w:tr><w:trPr><w:trHeight w:val="1191" w:hRule="exact"/></w:trPr>`;
+    for (let c = 0; c < 4; c++) {
+      const idx  = r * 4 + c;
+      const item = idx < allItems.length ? allItems[idx] : null;
+      rows += (item && item.isClass) ? _xmlClassCell(item.value) : _xmlCell(item ? item.value : '');
+    }
+    rows += `</w:tr>`;
+  }
+  return rows;
+}
+
+function _wrapDocx(body) {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+    `<w:body>${body}</w:body></w:document>`;
+}
+
+async function _saveDocx(body, filename) {
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>`);
+  zip.file('_rels/.rels',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>`);
+  zip.file('word/_rels/document.xml.rels',
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`);
+  zip.file('word/document.xml', _wrapDocx(body));
+  const blob = await zip.generateAsync({ type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  saveAs(blob, filename);
+}
+// ─────────────────────────────────────────────────────────────
+
 async function downloadWordDoc() {
   if (typeof JSZip === 'undefined') {
     showMsg('bcMsg', 'ZIP library not loaded — check your internet and refresh.', 'err'); return;
@@ -1770,12 +2101,11 @@ async function downloadWordDoc() {
   if (!bcData.length) {
     showMsg('bcMsg', 'Click "Generate Labels" first.', 'err'); return;
   }
-
   showMsg('bcMsg', '⏳ Building Word file…', 'info');
   document.getElementById('bcWordBtn').disabled = true;
 
   try {
-    // ── group by class ──────────────────────────────────
+    // Group by class
     const byClass = {}, classOrder = [];
     bcData.forEach(b => {
       if (!byClass[b.className]) { byClass[b.className] = []; classOrder.push(b.className); }
@@ -1783,158 +2113,15 @@ async function downloadWordDoc() {
     });
     const classes = [...new Set(classOrder)];
 
-    // ── XML helpers ─────────────────────────────────────
-    const esc = s => String(s)
-      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-      .replace(/"/g,'&quot;').replace(/'/g,'&apos;');
-
-    const NO_BORDER =
-      '<w:top w:val="none" w:sz="0" w:space="0" w:color="auto"/>' +
-      '<w:left w:val="none" w:sz="0" w:space="0" w:color="auto"/>' +
-      '<w:bottom w:val="none" w:sz="0" w:space="0" w:color="auto"/>' +
-      '<w:right w:val="none" w:sz="0" w:space="0" w:color="auto"/>';
-
-    function xmlCell(code) {
-      return `<w:tc>
-        <w:tcPr>
-          <w:tcW w:w="2835" w:type="dxa"/>
-          <w:tcBorders>${NO_BORDER}</w:tcBorders>
-          <w:tcMar>
-            <w:top w:w="0" w:type="dxa"/>
-            <w:left w:w="57" w:type="dxa"/>
-            <w:bottom w:w="0" w:type="dxa"/>
-            <w:right w:w="57" w:type="dxa"/>
-          </w:tcMar>
-          <w:vAlign w:val="center"/>
-        </w:tcPr>
-        <w:p>
-          <w:pPr>
-            <w:jc w:val="center"/>
-            <w:spacing w:before="0" w:after="0"/>
-          </w:pPr>
-          <w:r>
-            <w:rPr>
-              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-              <w:sz w:val="28"/><w:szCs w:val="28"/>
-            </w:rPr>
-            <w:t>${esc(code)}</w:t>
-          </w:r>
-        </w:p>
-      </w:tc>`;
-    }
-
-    // ── class-name cell (bold, larger font, spans no cols — just 1 cell like a sticker) ──
-    function xmlClassNameCell(cls) {
-      return `<w:tc>
-        <w:tcPr>
-          <w:tcW w:w="2835" w:type="dxa"/>
-          <w:tcBorders>${NO_BORDER}</w:tcBorders>
-          <w:tcMar>
-            <w:top w:w="0" w:type="dxa"/>
-            <w:left w:w="57" w:type="dxa"/>
-            <w:bottom w:w="0" w:type="dxa"/>
-            <w:right w:w="57" w:type="dxa"/>
-          </w:tcMar>
-          <w:vAlign w:val="center"/>
-          <w:shd w:val="clear" w:color="auto" w:fill="D9EAD3"/>
-        </w:tcPr>
-        <w:p>
-          <w:pPr>
-            <w:jc w:val="center"/>
-            <w:spacing w:before="0" w:after="0"/>
-          </w:pPr>
-          <w:r>
-            <w:rPr>
-              <w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>
-              <w:b/><w:sz w:val="32"/><w:szCs w:val="32"/>
-            </w:rPr>
-            <w:t>${esc(cls)}</w:t>
-          </w:r>
-        </w:p>
-      </w:tc>`;
-    }
-
-    // ── build body XML ──────────────────────────────────
     let body = '';
-
     classes.forEach((cls, ci) => {
-      // page break before every class except first
       if (ci > 0) body += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
-
-      // Prepend class name as first item, then codes
-      const allItems = [{ isClass: true, value: cls }, ...byClass[cls].map(c => ({ isClass: false, value: c }))];
-      const numRows  = Math.ceil(allItems.length / 4);
-
-      body += `<w:tbl>
-        <w:tblPr>
-          <w:tblW w:w="11340" w:type="dxa"/>
-          <w:tblBorders>
-            ${NO_BORDER}
-            <w:insideH w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-            <w:insideV w:val="none" w:sz="0" w:space="0" w:color="auto"/>
-          </w:tblBorders>
-        </w:tblPr>
-        <w:tblGrid>
-          <w:gridCol w:w="2835"/><w:gridCol w:w="2835"/>
-          <w:gridCol w:w="2835"/><w:gridCol w:w="2835"/>
-        </w:tblGrid>`;
-
-      for (let r = 0; r < numRows; r++) {
-        body += `<w:tr><w:trPr><w:trHeight w:val="1191" w:hRule="exact"/></w:trPr>`;
-        for (let c = 0; c < 4; c++) {
-          const idx  = r * 4 + c;
-          const item = idx < allItems.length ? allItems[idx] : null;
-          if (item && item.isClass) {
-            body += xmlClassNameCell(item.value);
-          } else {
-            body += xmlCell(item ? item.value : '');
-          }
-        }
-        body += `</w:tr>`;
-      }
-      body += `</w:tbl>`;
+      const allItems = [{ isClass:true, value:cls }, ...byClass[cls].map(c=>({isClass:false,value:c}))];
+      body += _TBL_WRAP(_buildDocxRows(allItems));
     });
 
-    // section properties (page setup matching VBA exactly)
-    body += `<w:sectPr>
-      <w:pgSz w:w="11906" w:h="16838"/>
-      <w:pgMar w:top="57" w:right="284" w:bottom="0" w:left="284"
-               w:header="720" w:footer="720" w:gutter="0"/>
-    </w:sectPr>`;
-
-    // ── assemble docx ZIP ───────────────────────────────
-    const docXml =
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-      `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"` +
-      ` xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
-      `<w:body>${body}</w:body></w:document>`;
-
-    const contentTypes =
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
-      `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
-      `<Default Extension="xml" ContentType="application/xml"/>` +
-      `<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>` +
-      `</Types>`;
-
-    const rootRels =
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-      `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>` +
-      `</Relationships>`;
-
-    const wordRels =
-      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
-      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>`;
-
-    const zip = new JSZip();
-    zip.file('[Content_Types].xml', contentTypes);
-    zip.file('_rels/.rels',         rootRels);
-    zip.file('word/document.xml',   docXml);
-    zip.file('word/_rels/document.xml.rels', wordRels);
-
-    const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-    saveAs(blob, 'Labels_ClassWise.docx');
+    body += _SECT_PR;
+    await _saveDocx(body, 'Labels_ClassWise.docx');
     clearMsg('bcMsg');
 
   } catch(err) {
@@ -1942,6 +2129,82 @@ async function downloadWordDoc() {
     console.error(err);
   } finally {
     document.getElementById('bcWordBtn').disabled = false;
+  }
+}
+
+// ── Download Word grouped by assigned user ────────────────
+// Classes belonging to the same user flow together (no page break).
+// A new page starts only when the user changes.
+// Unassigned classes are grouped at the end under "Unassigned".
+async function downloadWordDocByUser() {
+  if (typeof JSZip === 'undefined') {
+    showMsg('bcMsg', 'ZIP library not loaded — check your internet and refresh.', 'err'); return;
+  }
+  if (!bcData.length) {
+    showMsg('bcMsg', 'Click "Generate Labels" first.', 'err'); return;
+  }
+  showMsg('bcMsg', '⏳ Building Word file (by user)…', 'info');
+  document.getElementById('bcWordByUserBtn').disabled = true;
+
+  try {
+    // Build ordered list of (user → [className, ...]) preserving class order
+    const userClasses = new Map(); // user → Set of classNames in order
+    const userOrder   = [];
+    bcData.forEach(b => {
+      const user = classAssignments.get(b.className) || 'Unassigned';
+      if (!userClasses.has(user)) { userClasses.set(user, []); userOrder.push(user); }
+      if (!userClasses.get(user).includes(b.className)) userClasses.get(user).push(b.className);
+    });
+    const users = [...new Set(userOrder)];
+
+    // Build code lookup: className → [codeText, ...]
+    const byClass = {};
+    bcData.forEach(b => {
+      if (!byClass[b.className]) byClass[b.className] = [];
+      byClass[b.className].push(b.codeText);
+    });
+
+    let body = '';
+    users.forEach((user, ui) => {
+      // Page break between different users only
+      if (ui > 0) body += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+
+      // One table per user — all classes flow together
+      let tblRows = '';
+      userClasses.get(user).forEach(cls => {
+        const codes = byClass[cls] || [];
+        // Class name in col 1, first 3 codes fill cols 2-3-4 of the SAME row
+        // Remaining codes continue on next rows in groups of 4
+        const items = [
+          { isClass:true, value:cls },
+          ...codes.map(c => ({ isClass:false, value:c }))
+        ];
+        // Pad last row to a full row of 4 (no half-empty rows mid-class)
+        while (items.length % 4 !== 0) items.push({ isClass:false, value:'' });
+
+        const numRows = items.length / 4;
+        for (let r = 0; r < numRows; r++) {
+          tblRows += `<w:tr><w:trPr><w:trHeight w:val="1191" w:hRule="exact"/></w:trPr>`;
+          for (let c = 0; c < 4; c++) {
+            const item = items[r * 4 + c];
+            tblRows += item.isClass ? _xmlClassCell(item.value) : _xmlCell(item.value);
+          }
+          tblRows += `</w:tr>`;
+        }
+      });
+
+      body += _TBL_WRAP(tblRows);
+    });
+
+    body += _SECT_PR;
+    await _saveDocx(body, 'Labels_ByUser.docx');
+    clearMsg('bcMsg');
+
+  } catch(err) {
+    showMsg('bcMsg', '❌ Error: ' + (err.message || String(err)), 'err');
+    console.error(err);
+  } finally {
+    document.getElementById('bcWordByUserBtn').disabled = false;
   }
 }
 
@@ -2008,6 +2271,9 @@ function initStickeringTab(_retried) {
   const isDemo = currentRole === 'Demo';
   const stAddBtn = document.getElementById('stAddBtn');
   if (stAddBtn) stAddBtn.disabled = isDemo;
+
+  // Apply sticker lock state for currently selected class
+  applyStickerLockState();
 
   // Refresh Bar Code tab data silently (always keep it current)
   call('getBarCodeTabData', [], res => {
@@ -2329,6 +2595,7 @@ function stNewClassChange() {
     box.style.opacity = '1';
     box.style.pointerEvents = '';
   }
+  applyStickerLockState();
 }
 
 // ── Add New — Item Name searchable dropdown ───────────────
@@ -2416,6 +2683,9 @@ function stickeringAddNew() {
   const item = document.getElementById('stNewItem').value.trim();
   const cls  = document.getElementById('stNewClass').value;
   if (!cls)  { showMsg('stAddMsg', 'Please select a Class Name.', 'err'); return; }
+  if (stickerLockedClasses.has(cls)) {
+    showMsg('stAddMsg', `Stickering for "${cls}" is already submitted. Only Admin can unlock.`, 'err'); return;
+  }
   if (!item) { showMsg('stAddMsg', 'Please select an Item Name.', 'err'); return; }
   if (!code) { showMsg('stAddMsg', 'Please enter a Bar Code.', 'err'); return; }
 
