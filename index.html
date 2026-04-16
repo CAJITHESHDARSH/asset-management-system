@@ -2213,15 +2213,15 @@ async function downloadWordDocByUser() {
       byClass[b.className].push(b.codeText);
     });
 
-    // Layout: 14 rows × 4 cols = PAGE_SIZE 56 positions per page.
-    // Positions 0-51  → rows 1-13 (13 rows × 4 = 52 sticker slots)
-    // Positions 52-54 → row 14 cols 1-3 (3 sticker slots)
-    // Position 55     → phantom slot (never filled from allItems; page number goes here)
-    // PAGE_SIZE = 56 = 14 × 4 → multiple of 4 → class headers always land at col 1 ✓
-    const PAGE_SIZE = 56;
+    // Layout: 14 rows × 4 cols per page.
+    // Rows 1-13 (PAGE_SIZE = 52 slots) → sticker content.
+    // Row 14 → 3 empty cells + page number in col 4.
+    // PAGE_SIZE = 52 = 13 × 4 → always a multiple of 4 → class headers always at col 1,
+    // no items ever dropped.
+    const PAGE_SIZE = 52;
 
-    // Build flat items. Pad each user's block to a multiple of PAGE_SIZE so every
-    // user starts on a fresh page AND alignment is preserved across pages.
+    // Build flat items. Each class padded to multiple of 4.
+    // Each user's block padded to multiple of PAGE_SIZE → user starts on a fresh page.
     const allItems = [];
     users.forEach((user, ui) => {
       const userItems = [];
@@ -2231,7 +2231,6 @@ async function downloadWordDocByUser() {
           { isClass:true, value:cls },
           ...codes.map(c => ({ isClass:false, value:c }))
         ];
-        // Pad each class to full rows → class header always at col 1
         while (clsItems.length % 4 !== 0) clsItems.push({ isClass:false, value:'' });
         userItems.push(...clsItems);
       });
@@ -2244,7 +2243,7 @@ async function downloadWordDocByUser() {
       }
       allItems.push(...userItems);
     });
-    // Pad total to multiple of PAGE_SIZE so last page is complete
+    // Pad total to multiple of PAGE_SIZE
     const finalRem = allItems.length % PAGE_SIZE;
     if (finalRem !== 0) {
       for (let i = 0; i < PAGE_SIZE - finalRem; i++) allItems.push({ isClass:false, value:'' });
@@ -2257,7 +2256,7 @@ async function downloadWordDocByUser() {
     for (let offset = 0; offset < allItems.length; offset += PAGE_SIZE) {
       const page = allItems.slice(offset, offset + PAGE_SIZE);
 
-      // Rows 1-13: positions 0-51
+      // Rows 1-13: all 52 sticker slots
       for (let r = 0; r < 13; r++) {
         tblRows += `<w:tr><w:trPr><w:trHeight w:val="1191" w:hRule="exact"/></w:trPr>`;
         for (let c = 0; c < 4; c++) {
@@ -2272,12 +2271,9 @@ async function downloadWordDocByUser() {
         tblRows += `</w:tr>`;
       }
 
-      // Row 14: positions 52-54 as stickers, col 4 = page number (position 55 phantom)
+      // Row 14: 3 empty cells + page number
       tblRows += `<w:tr><w:trPr><w:trHeight w:val="1191" w:hRule="exact"/></w:trPr>`;
-      for (let c = 0; c < 3; c++) {
-        const item = page[52 + c] || { isClass:false, value:'' };
-        tblRows += item.isClass ? _xmlClassCell(item.value) : _xmlCell(item.value);
-      }
+      tblRows += _xmlCell('') + _xmlCell('') + _xmlCell('');
       tblRows += _xmlPageNumCell(globalPage);
       tblRows += `</w:tr>`;
 
